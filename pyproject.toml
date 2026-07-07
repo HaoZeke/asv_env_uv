@@ -4,13 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "asv_env_uv"
-version = "0.1.0"
-description = "ASV environment plugin (uv) — install and list in asv.conf.json plugins"
-requires-python = ">=3.9"
-dependencies = ["asv>=0.6.5"]
+version = "0.2.0"
+description = "ASV environment backend for environment_type=uv (uv find_uv_bin + CLI)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "BSD-3-Clause" }
+dependencies = ["asv>=0.6.5", "uv>=0.4"]
+
+[project.entry-points."asv.environment_backends"]
+uv = "asv_env_uv:Uv"
 
 [project.entry-points."asv.plugins"]
-uv = "asv_env_uv"
+uv = "asv_env_uv:Uv"
+
+[project.optional-dependencies]
+test = ["pytest"]
 
 [tool.setuptools.packages.find]
 include = ["asv_env_uv*"]
