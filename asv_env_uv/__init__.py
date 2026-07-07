@@ -4,8 +4,7 @@
 Uses :func:`uv.find_uv_bin` to locate the bundled/shipped ``uv`` executable,
 then drives ``uv venv`` and ``uv pip`` (not stdlib ``venv`` alone).
 
-Stage-1 ASV may ship in-tree ``asv.plugins.uv`` with the same ``tool_name``;
-**in-tree registration wins** when both are present.
+Core ASV does not ship in-tree ``asv.plugins.uv`` with the same ``tool_name``;
 """
 
 from __future__ import annotations
