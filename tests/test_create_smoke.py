@@ -1,0 +1,44 @@
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
+"""Minimal real create when uv is available."""
+
+import os
+import tempfile
+from pathlib import Path
+
+import pytest
+
+from asv.config import Config
+from asv_env_uv import Uv, _resolve_uv_bin
+
+
+@pytest.fixture
+def conf(tmp_path):
+    c = Config()
+    c.env_dir = str(tmp_path / "env")
+    c.project = "smoke"
+    c.repo = str(tmp_path / "repo")
+    c.repo_subdir = ""
+    c.install_timeout = 600.0
+    c.default_benchmark_timeout = 60.0
+    c.conda_channels = ["conda-forge"]
+    c.conda_environment_file = "IGNORE"
+    c.matrix = {}
+    c.pythons = ["3.12"]
+    return c
+
+
+def test_create_uv_venv_has_python(conf):
+    if _resolve_uv_bin() is None:
+        pytest.skip("uv not available")
+    # isolate from project pyproject
+    os.chdir(tempfile.mkdtemp())
+    import sys
+
+    py = f"{sys.version_info.major}.{sys.version_info.minor}"
+    env = Uv(conf, py, {}, {})
+    Path(env._path).mkdir(parents=True, exist_ok=True)
+    env._setup()
+    py_path = Path(env.find_executable("python"))
+    assert py_path.exists()
+    out = env.run_executable("python", ["-c", "print(1+1)"])
+    assert "2" in out
