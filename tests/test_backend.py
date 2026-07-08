@@ -8,20 +8,11 @@ def test_tool_name():
     assert Uv.tool_name == "uv"
 
 
-def test_cargo_depends_on_uv_crates():
-    cargo = Path(__file__).resolve().parents[1] / "Cargo.toml"
-    text = cargo.read_text()
-    assert re_search_uv(text)
-
-
-def re_search_uv(text: str) -> bool:
-    return 'uv =' in text or 'name = "uv"' in text or "\nuv " in text or 'uv =' in text.replace(" ", "")
-
-
-def test_cargo_has_uv_dep():
+def test_cargo_depends_on_uv_crate():
     text = (Path(__file__).resolve().parents[1] / "Cargo.toml").read_text()
-    assert "uv =" in text or 'uv=' in text
-    assert "uv-python" in text or "uv_python" in text
+    assert 'uv = {' in text or 'uv =' in text
+    assert "crate-type" in text
+    assert "cdylib" in text
 
 
 def test_maturin_pyproject():
