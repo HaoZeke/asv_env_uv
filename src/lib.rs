@@ -71,10 +71,27 @@ fn create_venv_impl(prefix: &str, python_version: &str) -> Result<(), String> {
             uv_virtualenv::ClearNonVirtualenv::Error,
         )),
         false, // relocatable
-        true,  // seed (pip/setuptools via uv-virtualenv, not PATH uv CLI)
+        false, // seed flag only sets pyvenv.cfg; bootstrap pip via ensurepip
         false, // upgradeable
     )
     .map_err(|e| format!("uv_virtualenv::create_venv failed: {e}"))?;
+
+    // Bootstrap pip using stdlib ensurepip in the new env (not PATH `uv` CLI).
+    let python = if cfg!(windows) {
+        location.join("Scripts").join("python.exe")
+    } else {
+        location.join("bin").join("python")
+    };
+    let status = std::process::Command::new(&python)
+        .args(["-m", "ensurepip", "--upgrade"])
+        .status()
+        .map_err(|e| format!("spawn ensurepip: {e}"))?;
+    if !status.success() {
+        return Err(format!(
+            "python -m ensurepip failed in {}: {status}",
+            python.display()
+        ));
+    }
 
     Ok(())
 }
