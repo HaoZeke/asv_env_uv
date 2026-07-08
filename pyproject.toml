@@ -1,17 +1,16 @@
 [build-system]
-requires = ["setuptools>=61"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
 
 [project]
 name = "asv_env_uv"
-version = "0.3.0"
-description = "ASV environment backend for uv via official maturin/Rust uv package"
+version = "0.4.0"
+description = "ASV environment_type=uv via maturin wheel over uv Rust crates"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "BSD-3-Clause" }
 dependencies = [
   "asv>=0.6.5",
-  "uv>=0.4",
 ]
 
 [project.entry-points."asv.environment_backends"]
@@ -23,5 +22,7 @@ uv = "asv_env_uv:Uv"
 [project.optional-dependencies]
 test = ["pytest"]
 
-[tool.setuptools.packages.find]
-include = ["asv_env_uv*"]
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "python"
+module-name = "asv_env_uv._native"

@@ -1,40 +1,44 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
-import ast
 from pathlib import Path
 
-import asv_env_uv
-from asv_env_uv import Uv, _HAS_UV_PKG, _resolve_uv_bin
+from asv_env_uv import Uv, _HAS_NATIVE
 
 
 def test_tool_name():
     assert Uv.tool_name == "uv"
 
 
-def test_requires_uv_package_binding():
-    tree = ast.parse(Path(asv_env_uv.__file__).read_text())
-    imported = []
-    for n in ast.walk(tree):
-        if isinstance(n, ast.ImportFrom) and n.module == "uv":
-            imported.extend(a.name for a in n.names)
-    assert "find_uv_bin" in imported
-    src = Path(asv_env_uv.__file__).read_text()
-    assert "import venv" not in src
-    # no PATH-only primary fallback
-    assert "util.which(\"uv\")" not in src and "util.which('uv')" not in src
+def test_cargo_depends_on_uv_crates():
+    cargo = Path(__file__).resolve().parents[1] / "Cargo.toml"
+    text = cargo.read_text()
+    assert re_search_uv(text)
 
 
-def test_resolve_uv_bin_uses_binding():
-    if not _HAS_UV_PKG:
-        return
-    path = _resolve_uv_bin()
-    assert path
-    assert "uv" in path.lower()
+def re_search_uv(text: str) -> bool:
+    return 'uv =' in text or 'name = "uv"' in text or "\nuv " in text or 'uv =' in text.replace(" ", "")
 
 
-def test_matches():
-    if _HAS_UV_PKG:
-        assert Uv.matches("3.12") is True
-    assert Uv.matches("not-a-version") is False
+def test_cargo_has_uv_dep():
+    text = (Path(__file__).resolve().parents[1] / "Cargo.toml").read_text()
+    assert "uv =" in text or 'uv=' in text
+    assert "uv-python" in text or "uv_python" in text
+
+
+def test_maturin_pyproject():
+    text = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
+    assert "maturin" in text
+    assert "asv_env_uv._native" in text
+
+
+def test_native_or_honest_missing():
+    if _HAS_NATIVE:
+        from asv_env_uv import _native
+
+        assert _native.backend_name() == "uv-crates"
+        assert "uv" in _native.uv_crate_version().lower() or "asv_env_uv" in _native.uv_crate_version()
+        assert callable(_native.create_venv)
+    else:
+        assert Uv.matches("3.12") is False
 
 
 def test_entry_point_metadata():

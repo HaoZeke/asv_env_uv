@@ -1,12 +1,12 @@
 # asv_env_uv
 
-ASV `environment_type = "uv"` using the official **uv** package (maturin/Rust
-wheel from Astral) and `uv.find_uv_bin()` — not stdlib `venv`, not a PATH-only
-guess without the package.
+ASV `environment_type = "uv"` as a **maturin** wheel whose Rust core depends
+on the **uv** crate stack (`uv`, `uv-python`, …).
 
 ```bash
-pip install "git+https://github.com/HaoZeke/asv_env_uv.git"
-# pulls dependency: uv (Rust binary + Python binding)
+maturin build --release
+pip install target/wheels/asv_env_uv-*.whl
+# runtime still needs a `uv` binary co-installed (same line as the crate)
 ```
 
 ```json

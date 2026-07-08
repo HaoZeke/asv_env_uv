@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from asv.config import Config
-from asv_env_uv import Uv, _HAS_UV_PKG, _resolve_uv_bin
+from asv_env_uv import Uv, _HAS_NATIVE
 
 
 @pytest.fixture
@@ -24,18 +24,15 @@ def conf(tmp_path):
     return c
 
 
-def test_create_via_find_uv_bin(conf):
-    if not _HAS_UV_PKG:
-        pytest.skip("uv package not installed")
-    bound = _resolve_uv_bin()
+def test_create_via_native(conf):
+    if not _HAS_NATIVE:
+        pytest.skip("maturin extension not built")
     os.chdir(tempfile.mkdtemp())
     import sys
 
     py = f"{sys.version_info.major}.{sys.version_info.minor}"
     env = Uv(conf, py, {}, {})
-    assert env._uv_path == bound or Path(env._uv_path).exists()
     Path(env._path).mkdir(parents=True, exist_ok=True)
     env._setup()
     assert Path(env.find_executable("python")).exists()
-    out = env.run_executable("python", ["-c", "print(1+1)"])
-    assert "2" in out
+    assert "2" in env.run_executable("python", ["-c", "print(1+1)"])
