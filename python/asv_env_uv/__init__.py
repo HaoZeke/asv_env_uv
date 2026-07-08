@@ -27,6 +27,10 @@ class Uv(environment.Environment):
     """Manage an environment via in-process uv-virtualenv (maturin extension)."""
 
     tool_name = "uv"
+    matrix_install_mode = "create"
+    supports_joint_pypi_solve = True
+    project_install_prefers_no_deps = True
+    requires_host_tool = None
 
     def __init__(self, conf, python, requirements, tagged_env_vars):
         if not _HAS_NATIVE:

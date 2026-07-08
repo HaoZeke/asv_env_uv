@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "asv_env_uv"
-version = "0.4.1"
+version = "0.4.2"
 description = "ASV environment_type=uv via maturin + in-process uv-virtualenv crates"
 readme = "README.md"
 requires-python = ">=3.10"
