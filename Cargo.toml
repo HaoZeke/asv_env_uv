@@ -1,8 +1,8 @@
 [package]
 name = "asv_env_uv"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
-description = "ASV uv environment backend (Rust/maturin over uv crate)"
+description = "ASV uv environment backend (maturin over uv-python + uv-virtualenv crates)"
 license = "BSD-3-Clause"
 rust-version = "1.82"
 
@@ -12,7 +12,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.25", features = ["extension-module"] }
-uv = { version = "0.11", default-features = false }
+# Real library crates from the uv monorepo (published to crates.io)
+uv-python = "0.0.61"
+uv-virtualenv = "0.0.61"
+uv-cache = "0.0.61"
 
 [profile.release]
 lto = "thin"

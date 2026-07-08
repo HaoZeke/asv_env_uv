@@ -1,8 +1,9 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
-"""ASV ``environment_type="uv"`` — maturin wheel over **uv** Rust crates.
+"""ASV ``environment_type="uv"`` — maturin wheel over **uv-python** / **uv-virtualenv**.
 
-Create path calls ``asv_env_uv._native.create_venv``, built against the
-``uv`` / ``uv-python`` crate stack (not stdlib venv-only).
+Create path calls ``asv_env_uv._native.create_venv_inprocess``, which uses
+``PythonInstallation::find_existing`` + ``uv_virtualenv::create_venv`` in-process.
+It does **not** shell out to a PATH ``uv`` binary for environment creation.
 """
 
 from __future__ import annotations
@@ -23,15 +24,19 @@ except ImportError:  # pragma: no cover
 
 
 class Uv(environment.Environment):
-    """Manage an environment via the maturin/Rust uv extension."""
+    """Manage an environment via in-process uv-virtualenv (maturin extension)."""
 
     tool_name = "uv"
 
     def __init__(self, conf, python, requirements, tagged_env_vars):
         if not _HAS_NATIVE:
             raise environment.EnvironmentUnavailable(
-                "asv_env_uv requires the maturin-built extension linked to the "
-                "uv crate (maturin build --release)"
+                "asv_env_uv requires the maturin-built extension linking "
+                "uv-python + uv-virtualenv (maturin build --release on a builder)"
+            )
+        if not _native.uses_inprocess_uv_virtualenv():
+            raise environment.EnvironmentUnavailable(
+                "asv_env_uv extension is not the in-process uv-virtualenv build"
             )
         self._python = python
         self._requirements = requirements
@@ -54,20 +59,21 @@ class Uv(environment.Environment):
 
     def _setup(self):
         log.info(
-            f"Creating uv env for {self.name} via maturin/_native "
-            f"(backend={_native.backend_name()}, {_native.uv_crate_version()})"
+            f"Creating uv env for {self.name} via in-process uv-virtualenv "
+            f"({_native.backend_name()}, {_native.uv_crate_version()})"
         )
         Path(self._path).mkdir(parents=True, exist_ok=True)
-        _native.create_venv(self._path, self._python)
+        _native.create_venv_inprocess(self._path, self._python)
         for key, val in {**self._requirements, **self._base_requirements}.items():
             if key.startswith("pip+"):
                 req = f"{key[4:]}{('==' + val) if val else ''}"
             else:
                 req = f"{key}{('==' + val) if val else ''}"
             try:
-                _native.pip_install(self._path, req if val or key.startswith("pip+") else key)
+                _native.pip_install_in_prefix(
+                    self._path, req if (val or key.startswith("pip+")) else key
+                )
             except Exception:
-                # complex declarations via python -m pip
                 declaration = f"{key[4:] if key.startswith('pip+') else key} {val}".strip()
                 parsed = util.ParsedPipDeclaration(declaration)
                 util.construct_pip_call(self._run_pip, parsed)()

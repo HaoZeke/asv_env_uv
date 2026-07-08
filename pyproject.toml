@@ -4,14 +4,12 @@ build-backend = "maturin"
 
 [project]
 name = "asv_env_uv"
-version = "0.4.0"
-description = "ASV environment_type=uv via maturin wheel over uv Rust crates"
+version = "0.4.1"
+description = "ASV environment_type=uv via maturin + in-process uv-virtualenv crates"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "BSD-3-Clause" }
-dependencies = [
-  "asv>=0.6.5",
-]
+dependencies = ["asv>=0.6.5"]
 
 [project.entry-points."asv.environment_backends"]
 uv = "asv_env_uv:Uv"

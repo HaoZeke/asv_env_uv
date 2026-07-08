@@ -1,111 +1,129 @@
-//! Native create path for asv_env_uv — maturin extension **linked to the uv crate**.
+//! In-process create path using **uv-python** + **uv-virtualenv** crate APIs.
+//!
+//! No `std::process::Command` to a PATH `uv` binary for create/install of the
+//! environment itself.
+use std::path::{Path, PathBuf};
+
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use std::path::PathBuf;
-use std::process::Command;
 
-// Force the `uv` crate into the link graph (compile fails if the dep is removed).
-#[allow(unused_imports)]
-use uv as _uv_crate_linked;
+use uv_cache::Cache;
+use uv_python::{
+    EnvironmentPreference, PythonInstallation, PythonPreference, PythonRequest,
+};
+use uv_virtualenv::{create_venv, OnExisting, Prompt, RemovalReason};
 
 fn runtime_err(msg: impl ToString) -> PyErr {
     PyRuntimeError::new_err(msg.to_string())
 }
 
+/// Mechanism label — must reflect crate-based create.
+#[pyfunction]
+fn backend_name() -> &'static str {
+    "uv-virtualenv-crates"
+}
+
+/// Version / linkage marker for tests.
 #[pyfunction]
 fn uv_crate_version() -> String {
-    // CARGO package of *this* extension; linkage proven by `use uv as _uv_crate_linked`.
     format!(
-        "asv_env_uv={} (linked Rust crate: uv)",
+        "asv_env_uv={} (uv-python+uv-virtualenv in-process create)",
         env!("CARGO_PKG_VERSION")
     )
 }
 
-#[pyfunction]
-fn backend_name() -> &'static str {
-    "uv-crates"
-}
-
+/// Create a virtualenv at `prefix` for `python_version` using uv crate APIs only.
+///
+/// Uses:
+/// - [`PythonRequest::parse`] + [`PythonInstallation::find_existing`]
+/// - [`uv_virtualenv::create_venv`]
 #[pyfunction]
 #[pyo3(signature = (prefix, python_version))]
-fn create_venv(prefix: &str, python_version: &str) -> PyResult<()> {
-    let _ = uv_crate_version();
-    let uv_bin = find_uv_executable().map_err(runtime_err)?;
-    let prefix = PathBuf::from(prefix);
-    if let Some(parent) = prefix.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| runtime_err(e.to_string()))?;
+fn create_venv_inprocess(prefix: &str, python_version: &str) -> PyResult<()> {
+    create_venv_impl(prefix, python_version).map_err(runtime_err)
+}
+
+fn create_venv_impl(prefix: &str, python_version: &str) -> Result<(), String> {
+    let location = PathBuf::from(prefix);
+    if let Some(parent) = location.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("mkdir parent: {e}"))?;
     }
-    let status = Command::new(&uv_bin)
-        .args([
-            "venv",
-            &format!("--python={python_version}"),
-            "--no-project",
-            "--seed",
-        ])
-        .arg(&prefix)
-        .status()
-        .map_err(|e| runtime_err(format!("spawn {uv_bin:?}: {e}")))?;
-    if !status.success() {
-        return Err(runtime_err(format!(
-            "uv venv failed status={status} bin={uv_bin:?}"
-        )));
-    }
-    let status = Command::new(&uv_bin)
-        .args(["pip", "install", "-v", "wheel", "pip>=8", "--python"])
-        .arg(&prefix)
-        .status()
-        .map_err(|e| runtime_err(e.to_string()))?;
-    if !status.success() {
-        return Err(runtime_err(format!("uv pip seed failed: {status}")));
-    }
+
+    let cache = Cache::temp().map_err(|e| format!("uv cache: {e}"))?;
+
+    let request = PythonRequest::parse(python_version);
+    let installation = PythonInstallation::find_existing(
+        &request,
+        EnvironmentPreference::OnlySystem,
+        PythonPreference::OnlySystem,
+        &cache,
+    )
+    .map_err(|e| format!("find Python {python_version:?}: {e}"))?;
+
+    let interpreter = installation.into_interpreter();
+
+    create_venv(
+        &location,
+        interpreter,
+        Prompt::None,
+        false, // system_site_packages
+        OnExisting::Remove(RemovalReason::UserRequest(
+            uv_virtualenv::ClearNonVirtualenv::Error,
+        )),
+        false, // relocatable
+        true,  // seed (pip/setuptools via uv-virtualenv, not PATH uv CLI)
+        false, // upgradeable
+    )
+    .map_err(|e| format!("uv_virtualenv::create_venv failed: {e}"))?;
+
     Ok(())
 }
 
+/// Install a requirement into an existing prefix using the prefix's `python -m pip`.
+///
+/// This intentionally does **not** shell out to a PATH `uv` binary. After
+/// `create_venv_inprocess` with seed packages, `python -m pip` is available
+/// inside the environment.
 #[pyfunction]
 #[pyo3(signature = (prefix, requirement))]
-fn pip_install(prefix: &str, requirement: &str) -> PyResult<()> {
-    let _ = uv_crate_version();
-    let uv_bin = find_uv_executable().map_err(runtime_err)?;
-    let status = Command::new(&uv_bin)
-        .args(["pip", "install", requirement, "--python", prefix])
+fn pip_install_in_prefix(prefix: &str, requirement: &str) -> PyResult<()> {
+    use std::process::Command;
+    let python = Path::new(prefix).join(if cfg!(windows) {
+        "Scripts/python.exe"
+    } else {
+        "bin/python"
+    });
+    if !python.is_file() {
+        return Err(runtime_err(format!(
+            "no python in prefix (create first): {}",
+            python.display()
+        )));
+    }
+    let status = Command::new(&python)
+        .args(["-m", "pip", "install", requirement])
         .status()
         .map_err(|e| runtime_err(e.to_string()))?;
     if !status.success() {
         return Err(runtime_err(format!(
-            "uv pip install {requirement:?} failed: {status}"
+            "python -m pip install {requirement:?} failed: {status}"
         )));
     }
     Ok(())
 }
 
-fn find_uv_executable() -> Result<PathBuf, String> {
-    for key in ["ASV_UV_BIN", "UV_BIN"] {
-        if let Ok(p) = std::env::var(key) {
-            let pb = PathBuf::from(p);
-            if pb.is_file() {
-                return Ok(pb);
-            }
-        }
-    }
-    if let Ok(path) = std::env::var("PATH") {
-        for dir in std::env::split_paths(&path) {
-            for name in ["uv", "uv.exe"] {
-                let cand = dir.join(name);
-                if cand.is_file() {
-                    return Ok(cand);
-                }
-            }
-        }
-    }
-    Err("uv executable not found (set ASV_UV_BIN); maturin extension is linked to the uv crate".into())
+/// True if this module's create path is in-process crate API (always).
+#[pyfunction]
+fn uses_inprocess_uv_virtualenv() -> bool {
+    true
 }
 
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(create_venv, m)?)?;
-    m.add_function(wrap_pyfunction!(pip_install, m)?)?;
+    m.add_function(wrap_pyfunction!(create_venv_inprocess, m)?)?;
+    m.add_function(wrap_pyfunction!(pip_install_in_prefix, m)?)?;
     m.add_function(wrap_pyfunction!(backend_name, m)?)?;
     m.add_function(wrap_pyfunction!(uv_crate_version, m)?)?;
+    m.add_function(wrap_pyfunction!(uses_inprocess_uv_virtualenv, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }

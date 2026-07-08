@@ -24,9 +24,12 @@ def conf(tmp_path):
     return c
 
 
-def test_create_via_native(conf):
+def test_create_via_inprocess_uv_virtualenv(conf):
     if not _HAS_NATIVE:
         pytest.skip("maturin extension not built")
+    from asv_env_uv import _native
+
+    assert _native.uses_inprocess_uv_virtualenv()
     os.chdir(tempfile.mkdtemp())
     import sys
 
