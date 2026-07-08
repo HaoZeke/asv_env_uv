@@ -1,32 +1,14 @@
 # asv_env_uv
 
-ASV environment backend for `environment_type = "uv"` (uv.find_uv_bin + uv venv/pip).
-
-Core ASV (extract design) ships only **virtualenv** and **existing**.
-This package is the **provider** for `uv` — there is no in-tree
-`asv.plugins.uv`.
-
-## Discovery
-
-```toml
-[project.entry-points."asv.environment_backends"]
-uv = "asv_env_uv:Uv"
-```
+ASV `environment_type = "uv"` using the official **uv** package (maturin/Rust
+wheel from Astral) and `uv.find_uv_bin()` — not stdlib `venv`, not a PATH-only
+guess without the package.
 
 ```bash
 pip install "git+https://github.com/HaoZeke/asv_env_uv.git"
+# pulls dependency: uv (Rust binary + Python binding)
 ```
 
 ```json
 { "environment_type": "uv" }
-```
-
-Install into the host environment that runs ASV. Conf `plugins` is optional
-when entry points are registered.
-
-## Tests
-
-```bash
-pip install -e ".[test]"
-pytest -q
 ```

@@ -1,6 +1,4 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
-"""Minimal real create when uv is available."""
-
 import os
 import tempfile
 from pathlib import Path
@@ -8,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from asv.config import Config
-from asv_env_uv import Uv, _resolve_uv_bin
+from asv_env_uv import Uv, _HAS_UV_PKG, _resolve_uv_bin
 
 
 @pytest.fixture
@@ -23,22 +21,21 @@ def conf(tmp_path):
     c.conda_channels = ["conda-forge"]
     c.conda_environment_file = "IGNORE"
     c.matrix = {}
-    c.pythons = ["3.12"]
     return c
 
 
-def test_create_uv_venv_has_python(conf):
-    if _resolve_uv_bin() is None:
-        pytest.skip("uv not available")
-    # isolate from project pyproject
+def test_create_via_find_uv_bin(conf):
+    if not _HAS_UV_PKG:
+        pytest.skip("uv package not installed")
+    bound = _resolve_uv_bin()
     os.chdir(tempfile.mkdtemp())
     import sys
 
     py = f"{sys.version_info.major}.{sys.version_info.minor}"
     env = Uv(conf, py, {}, {})
+    assert env._uv_path == bound or Path(env._uv_path).exists()
     Path(env._path).mkdir(parents=True, exist_ok=True)
     env._setup()
-    py_path = Path(env.find_executable("python"))
-    assert py_path.exists()
+    assert Path(env.find_executable("python")).exists()
     out = env.run_executable("python", ["-c", "print(1+1)"])
     assert "2" in out
